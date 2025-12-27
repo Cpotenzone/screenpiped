@@ -73,6 +73,9 @@ import { useSqlAutocomplete } from "@/lib/hooks/use-sql-autocomplete";
 import * as Sentry from "@sentry/react";
 import { defaultOptions } from "tauri-plugin-sentry-api";
 import { useLoginDialog } from "../login-dialog";
+import { MonitorArrangement } from "./monitor-arrangement";
+import { MonitorQuickActions } from "./monitor-quick-actions";
+
 
 type PermissionsStatus = {
   screenRecording: string;
@@ -91,6 +94,9 @@ interface MonitorDevice {
   is_default: boolean;
   width: number;
   height: number;
+  x: number;
+  y: number;
+  scale_factor: number;
 }
 
 const createWindowOptions = (
@@ -375,9 +381,8 @@ export function RecordingSettings() {
 
     // If trying to use cloud but not subscribed
     if (value === "screenpipe-cloud" && !settings.user?.cloud_subscribed) {
-      const clientRefId = `${
-        settings.user?.id
-      }&customer_email=${encodeURIComponent(settings.user?.email ?? "")}`;
+      const clientRefId = `${settings.user?.id
+        }&customer_email=${encodeURIComponent(settings.user?.email ?? "")}`;
       openUrl(
         `https://buy.stripe.com/7sIdRzbym4RA98c7sX?client_reference_id=${clientRefId}`
       );
@@ -547,7 +552,7 @@ export function RecordingSettings() {
       if (await exists(settings.dataDir)) {
         return;
       }
-    } catch (err) {}
+    } catch (err) { }
 
     toast({
       title: "error",
@@ -774,31 +779,40 @@ export function RecordingSettings() {
                     <Monitor className="h-4 w-4" />
                     <span>monitors</span>
                   </Label>
-                  <MultiSelect
-                    options={availableMonitors.map((monitor) => ({
-                      value: monitor.id.toString(),
-                      label: `${monitor.id}. ${monitor.name} - ${
-                        monitor.width
-                      }x${monitor.height} ${
-                        monitor.is_default ? "(default)" : ""
-                      }`,
-                    }))}
-                    defaultValue={settings.monitorIds}
-                    onValueChange={(values) =>
-                      values.length === 0
-                        ? handleSettingsChange({ disableVision: true }, true)
-                        : handleSettingsChange({ monitorIds: values }, true)
-                    }
-                    placeholder={
-                      settings.useAllMonitors
-                        ? "all monitors will be used"
-                        : "select monitors"
-                    }
-                    variant="default"
-                    modalPopover={true}
-                    animation={2}
-                    // disabled={settings.useAllMonitors}
-                  />
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Main monitor arrangement */}
+                    <div className="lg:col-span-2">
+                      <MonitorArrangement
+                        monitors={availableMonitors}
+                        selected={settings.monitorIds}
+                        onSelect={(ids) =>
+                          ids.length === 0
+                            ? handleSettingsChange({ disableVision: true }, true)
+                            : handleSettingsChange({ monitorIds: ids }, true)
+                        }
+                        useAll={settings.useAllMonitors}
+                        onUseAllChange={(useAll) =>
+                          handleSettingsChange({ useAllMonitors: useAll }, true)
+                        }
+                      />
+                    </div>
+
+                    {/* Quick actions sidebar */}
+                    <div className="lg:col-span-1">
+                      <MonitorQuickActions
+                        monitors={availableMonitors}
+                        selected={settings.monitorIds}
+                        useAll={settings.useAllMonitors}
+                        onApply={(selectedIds, useAll) => {
+                          handleSettingsChange({
+                            monitorIds: selectedIds,
+                            useAllMonitors: useAll,
+                          }, true);
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-col space-y-2">
@@ -1483,12 +1497,10 @@ export function RecordingSettings() {
                       : "select directory"}
                     <span className="text-muted-foreground">
                       {settings.dataDir === settings.dataDir
-                        ? `current at: ${
-                            settings.dataDir || "default directory"
-                          }`
-                        : `change to: ${
-                            settings.dataDir || "default directory"
-                          }`}
+                        ? `current at: ${settings.dataDir || "default directory"
+                        }`
+                        : `change to: ${settings.dataDir || "default directory"
+                        }`}
                     </span>
                   </div>
                   <ChevronsUpDown className="h-4 w-4 opacity-50" />

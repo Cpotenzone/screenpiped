@@ -41,6 +41,7 @@ mod store;
 mod tray;
 mod updates;
 mod window_api;
+mod monitor_preview;
 
 pub use server::*;
 
@@ -686,6 +687,7 @@ async fn main() {
             upload_file_to_s3,
             update_global_shortcuts,
             get_env,
+            monitor_preview::capture_monitor_preview,
         ])
         .setup(|app| {
             //deep link register_all

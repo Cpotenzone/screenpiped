@@ -60,6 +60,7 @@ import * as Sentry from "@sentry/react";
 import { defaultOptions } from "tauri-plugin-sentry-api";
 import { ToastAction } from "./ui/toast";
 
+// Core pipes are now detected dynamically from installed pipes
 const corePipes: string[] = [];
 
 export const PipeStore: React.FC = () => {
@@ -140,6 +141,11 @@ export const PipeStore: React.FC = () => {
             return p.id?.replace("._temp", "") === plugin.name;
           });
 
+          // Detect if this is a core pipe from the installed pipe's source
+          const is_core = installedPipe?.config?.source?.includes("github.com/mediar-ai/screenpipe") ||
+            installedPipe?.config?.source?.includes("screenpipe/pipes/") ||
+            !installedPipe?.config?.source;
+
           return {
             ...plugin,
             is_installed: !!installedPipe,
@@ -147,7 +153,7 @@ export const PipeStore: React.FC = () => {
             has_purchased: purchaseHistory.some(
               (p) => p.plugin_id === plugin.id,
             ),
-            is_core_pipe: corePipes.includes(plugin.name),
+            is_core_pipe: is_core,
             is_enabled: installedPipe?.config?.enabled ?? false,
             has_update: false,
           };
@@ -164,21 +170,29 @@ export const PipeStore: React.FC = () => {
         .map((p) => {
           const pluginName = p.config?.source?.split("/").pop();
           const is_local = p.id.endsWith("_local");
+          // Detect core pipes: those from official screenpipe repo or bundled with app
+          const is_core = p.config?.source?.includes("github.com/mediar-ai/screenpipe") ||
+            p.config?.source?.includes("screenpipe/pipes/") ||
+            !p.config?.source; // No source = bundled with app
+
+          // Use version from config (set by pipe.json)
+          const version = p.config?.version || "0.0.0";
+
           return {
             id: p.id || "",
-            name: pluginName || "",
+            name: pluginName || p.id || "",
             description: p.desc,
-            version: p.config?.version || "0.0.0",
+            version,
             is_paid: false,
             price: 0,
             status: "active",
             created_at: new Date().toISOString(),
-            developer_accounts: { developer_name: "You" },
+            developer_accounts: { developer_name: is_core ? "Screenpipe" : "You" },
             plugin_analytics: { downloads_count: 0 },
             is_installed: true,
             installed_config: p.config,
             has_purchased: true,
-            is_core_pipe: false,
+            is_core_pipe: is_core,
             is_enabled: p.config?.enabled || false,
             source_code: p.config?.source || "",
             is_local,
@@ -352,27 +366,57 @@ export const PipeStore: React.FC = () => {
         duration: 10000,
       });
 
-      const pipeApi = await PipeApi.create(settings.user!.token!);
-      const response = await pipeApi.downloadPipe(pipe.id);
+      // Check if pipe has a GitHub source_code URL
+      let downloadUrl: string;
 
-      const downloadResponse = await fetch(
-        "http://localhost:3030/pipes/download-private",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+      if (pipe.source_code && pipe.source_code.includes('github.com')) {
+        // Use GitHub URL directly (bypasses expired pre-signed URLs)
+        console.log("Using GitHub source URL:", pipe.source_code);
+        downloadUrl = pipe.source_code;
+
+        // Use the regular download endpoint for GitHub URLs
+        const downloadResponse = await fetch(
+          "http://localhost:3030/pipes/download",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              url: downloadUrl,
+            }),
           },
-          body: JSON.stringify({
-            pipe_name: pipe.name,
-            pipe_id: pipe.id,
-            url: response.download_url,
-          }),
-        },
-      );
+        );
 
-      const data = await downloadResponse.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to download pipe");
+        const data = await downloadResponse.json();
+        if (!data.success) {
+          throw new Error(data.error || "Failed to download pipe");
+        }
+      } else {
+        // Fallback to store API (may have expired URL issue)
+        console.log("Using store API download URL");
+        const pipeApi = await PipeApi.create(settings.user!.token!);
+        const response = await pipeApi.downloadPipe(pipe.id);
+
+        const downloadResponse = await fetch(
+          "http://localhost:3030/pipes/download-private",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              pipe_name: pipe.name,
+              pipe_id: pipe.id,
+              url: response.download_url,
+            }),
+          },
+        );
+
+        const data = await downloadResponse.json();
+        if (!data.success) {
+          throw new Error(data.error || "Failed to download pipe");
+        }
       }
 
       await fetchInstalledPipes();
@@ -382,10 +426,10 @@ export const PipeStore: React.FC = () => {
         prevPipes.map((p) =>
           p.id === pipe.id
             ? {
-                ...p,
-                is_installed: true,
-                is_installing: false,
-              }
+              ...p,
+              is_installed: true,
+              is_installing: false,
+            }
             : p,
         ),
       );
@@ -683,8 +727,7 @@ export const PipeStore: React.FC = () => {
       onComplete();
     } catch (error) {
       console.error(
-        `Failed to ${
-          pipe.installed_config?.enabled ? "disable" : "enable"
+        `Failed to ${pipe.installed_config?.enabled ? "disable" : "enable"
         } pipe:`,
         error,
       );
@@ -848,12 +891,12 @@ export const PipeStore: React.FC = () => {
         prevPipes.map((p) =>
           p.id === pipe.id
             ? {
-                ...p,
-                installed_config: {
-                  ...p.installed_config!,
-                  buildStatus: "in_progress",
-                },
-              }
+              ...p,
+              installed_config: {
+                ...p.installed_config!,
+                buildStatus: "in_progress",
+              },
+            }
             : p,
         ),
       );
@@ -867,12 +910,12 @@ export const PipeStore: React.FC = () => {
           prevPipes.map((p) =>
             p.id === pipe.id
               ? {
-                  ...p,
-                  installed_config: {
-                    ...p.installed_config!,
-                    buildStatus: "success",
-                  },
-                }
+                ...p,
+                installed_config: {
+                  ...p.installed_config!,
+                  buildStatus: "success",
+                },
+              }
               : p,
           ),
         );
@@ -948,12 +991,12 @@ export const PipeStore: React.FC = () => {
           prevPipes.map((p) =>
             p.id === pipe.id
               ? {
-                  ...p,
-                  installed_config: {
-                    ...p.installed_config!,
-                    buildStatus: "error",
-                  },
-                }
+                ...p,
+                installed_config: {
+                  ...p.installed_config!,
+                  buildStatus: "error",
+                },
+              }
               : p,
           ),
         );
@@ -987,12 +1030,12 @@ export const PipeStore: React.FC = () => {
         prevPipes.map((p) =>
           p.id === pipe.id
             ? {
-                ...p,
-                installed_config: {
-                  ...p.installed_config!,
-                  buildStatus: "error",
-                },
-              }
+              ...p,
+              installed_config: {
+                ...p.installed_config!,
+                buildStatus: "error",
+              },
+            }
             : p,
         ),
       );
@@ -1061,7 +1104,7 @@ export const PipeStore: React.FC = () => {
           description: "please login to check for updates",
           variant: "destructive",
         });
-		setIsUpdating(false)
+        setIsUpdating(false)
         return;
       }
       // Get last check time from local storage
@@ -1080,7 +1123,7 @@ export const PipeStore: React.FC = () => {
           "Diff (minutes):",
           (now - lastCheckTime) / (60 * 1000),
         );
-		toast({
+        toast({
           title: "skipping update check",
           description: "last check was less than 5 minutes ago",
         });
@@ -1093,7 +1136,7 @@ export const PipeStore: React.FC = () => {
       console.log("[pipe-update] Checking for updates...");
 
       const installedPipes = pipes.filter(
-        (pipe) => pipe.is_installed && pipe.installed_config?.version,
+        (pipe) => pipe.is_installed
       );
 
       // Skip if no pipes to check
@@ -1111,7 +1154,7 @@ export const PipeStore: React.FC = () => {
         // Format pipes for batch update check
         const pluginsToCheck = installedPipes.map((pipe) => ({
           pipe_id: pipe.id,
-          version: pipe.installed_config!.version!,
+          version: pipe.installed_config?.version || "0.0.0",
         }));
 
         console.log(
@@ -1352,7 +1395,7 @@ export const PipeStore: React.FC = () => {
                 variant="outline"
                 onClick={openStatusDialog}
                 className="gap-2"
-            >
+              >
                 <Power className="h-4 w-4" />
                 check service status
               </Button>
@@ -1421,24 +1464,24 @@ export const PipeStore: React.FC = () => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Dialog open={confirmOpen} onOpenChange={isPurging ? () => {} : setConfirmOpen}>
+            <Dialog open={confirmOpen} onOpenChange={isPurging ? () => { } : setConfirmOpen}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>confirm deletion of all pipes?</DialogTitle>
                   <DialogDescription>
-                    are you sure you want to delete all pipes? <br/> you&apos;ll have to install them again
+                    are you sure you want to delete all pipes? <br /> you&apos;ll have to install them again
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex justify-end gap-4">
-                  <Button 
-                    onClick={() => setConfirmOpen(false)} 
+                  <Button
+                    onClick={() => setConfirmOpen(false)}
                     disabled={isPurging}
                     variant={"outline"}
                   >
                     cancel
                   </Button>
-                  <Button 
-                    onClick={handleResetAllPipes} 
+                  <Button
+                    onClick={handleResetAllPipes}
                     disabled={isPurging}
                   >
                     {isPurging ? (
@@ -1447,8 +1490,8 @@ export const PipeStore: React.FC = () => {
                         deleting all pipes...
                       </>
                     ) : (
-                        "confirm"
-                      )}
+                      "confirm"
+                    )}
                   </Button>
                 </div>
               </DialogContent>

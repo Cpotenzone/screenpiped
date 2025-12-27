@@ -16,6 +16,9 @@ pub struct MonitorData {
     pub height: u32,
     pub name: String,
     pub is_primary: bool,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f32,
 }
 
 impl SafeMonitor {
@@ -26,6 +29,9 @@ impl SafeMonitor {
             height: monitor.height().unwrap(),
             name: monitor.name().unwrap().to_string(),
             is_primary: monitor.is_primary().unwrap(),
+            x: monitor.x().unwrap(),
+            y: monitor.y().unwrap(),
+            scale_factor: monitor.scale_factor().unwrap(),
         });
 
         Self {
@@ -81,6 +87,22 @@ impl SafeMonitor {
 
     pub fn is_primary(&self) -> bool {
         self.monitor_data.is_primary
+    }
+
+    pub fn x(&self) -> i32 {
+        self.monitor_data.x
+    }
+
+    pub fn y(&self) -> i32 {
+        self.monitor_data.y
+    }
+
+    pub fn scale_factor(&self) -> f32 {
+        self.monitor_data.scale_factor
+    }
+
+    pub fn position(&self) -> (i32, i32) {
+        (self.monitor_data.x, self.monitor_data.y)
     }
 
     pub fn get_info(&self) -> MonitorData {

@@ -1,60 +1,32 @@
-# Binaries for programs and examples
-*.exe
-*.exe~
-*.dll
-*.dylib
-*.so
+# Build artifacts
+target/
+dist/
+out/
+*.dmg
+*.app.tar.gz
+bundle/
 
-# Test binary, built with `cargo test`
-*.test
+# Dependencies
+node_modules/
+.next/
 
-# Rust/Cargo specific files
-*target
+# Local data
+.screenpipe/
+*.db
+*.sqlite
 
-# IDE specific files
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
 .idea/
 .vscode/
-*.rs.bk
+*.swp
 
-# act cli
-.secrets
+# Logs
+*.log
 
-# db 
-data/ 
-text_json/
-
-src-tauri/deno-*
-
-# Tauri signing key
-tauri_key_louis.key
-pnpm-lock.yaml
-
-.DS_Store
-
-# Ignore onnxruntime-win-x64-gpu libraries
-onnxruntime-win-x64-gpu*/
-
-# ignore environment variables
+# Environment
 .env
-
-# JavaScript stuff
-node_modules/
-
-
-cn 
-
-
-# Python stuff
-venv/
-app.py
-*.pyc
-*.pyo
-*.pyd
-*.py
-*.pyw
-*.pyz
-*.py3
-*.py3w
-*.py3z
-__pycache__/
-
+.env.local

@@ -291,7 +291,7 @@ fn spawn_sidecar(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let _use_all_monitors = store
+    let use_all_monitors = store
         .get("useAllMonitors")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
@@ -302,7 +302,7 @@ fn spawn_sidecar(
     println!("audio_chunk_duration: {}", audio_chunk_duration);
 
     let port_str = port.to_string();
-    let mut args = vec!["--port", port_str.as_str(), "--enable-pipe-manager"];
+    let mut args = vec!["--port", port_str.as_str()];
     let fps_str = fps.to_string();
     if fps != 0.2 {
         args.push("--fps");
@@ -325,7 +325,11 @@ fn spawn_sidecar(
         args.push(model);
     }
 
-    if !monitor_ids.is_empty() && monitor_ids[0] != Value::String("default".to_string()) {
+    // Handle monitor selection: use_all_monitors takes precedence
+    if use_all_monitors {
+        info!("Using all monitors mode");
+        // Don't add any --monitor-id args, screenpipe will use all monitors
+    } else if !monitor_ids.is_empty() && monitor_ids[0] != Value::String("default".to_string()) {
         for monitor in &monitor_ids {
             args.push("--monitor-id");
             args.push(monitor.as_str().unwrap());
@@ -420,10 +424,6 @@ fn spawn_sidecar(
     if enable_realtime_vision {
         args.push("--enable-realtime-vision");
     }
-
-    // if use_all_monitors {
-    //     args.push("--use-all-monitors");
-    // }
 
     let disable_vision = store
         .get("disableVision")

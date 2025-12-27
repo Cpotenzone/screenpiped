@@ -1700,6 +1700,27 @@ pub async fn download_pipe_private(
         }
     };
 
+    // Check HTTP status code
+    let status = response.status();
+    debug!("HTTP response status: {}", status);
+    if !status.is_success() {
+        let err_msg = format!("Failed to download zip: HTTP {}", status);
+        error!("{}", err_msg);
+        cleanup_temp(&temp_dir, &temp_dir.join("temp.zip")).await?;
+        return Err(anyhow::anyhow!(err_msg));
+    }
+
+    // Check content-type header
+    if let Some(content_type) = response.headers().get("content-type") {
+        debug!("Content-Type: {:?}", content_type);
+        let content_type_str = content_type.to_str().unwrap_or("");
+        if !content_type_str.contains("application/zip") 
+            && !content_type_str.contains("application/octet-stream")
+            && !content_type_str.contains("application/x-zip-compressed") {
+            warn!("Unexpected Content-Type: {}. Expected ZIP file.", content_type_str);
+        }
+    }
+
     let zip_content = match response.bytes().await {
         Ok(content) => content,
         Err(e) => {
@@ -1709,6 +1730,29 @@ pub async fn download_pipe_private(
             return Err(anyhow::anyhow!(err_msg));
         }
     };
+
+    // Validate ZIP file signature (first 4 bytes should be PK\x03\x04)
+    debug!("Downloaded {} bytes", zip_content.len());
+    if zip_content.len() < 4 {
+        let err_msg = format!("Downloaded file is too small ({} bytes) to be a valid ZIP", zip_content.len());
+        error!("{}", err_msg);
+        cleanup_temp(&temp_dir, &temp_dir.join("temp.zip")).await?;
+        return Err(anyhow::anyhow!(err_msg));
+    }
+
+    let zip_signature = &zip_content[0..4];
+    if zip_signature != b"PK\x03\x04" && zip_signature != b"PK\x05\x06" {
+        let err_msg = format!(
+            "Downloaded file is not a valid ZIP archive. Got signature: {:?}. First 100 bytes: {:?}",
+            zip_signature,
+            &zip_content[0..std::cmp::min(100, zip_content.len())]
+        );
+        error!("{}", err_msg);
+        cleanup_temp(&temp_dir, &temp_dir.join("temp.zip")).await?;
+        return Err(anyhow::anyhow!(err_msg));
+    }
+
+    debug!("ZIP signature validated successfully");
 
     // Create temporary zip file
     let temp_zip = temp_dir.join("temp.zip");

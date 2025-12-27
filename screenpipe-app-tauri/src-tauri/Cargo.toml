@@ -87,6 +87,7 @@ async-stream = "0.3"
 
 chrono = "0.4.39"
 tauri-plugin-opener = "2.5.0"
+xcap = "0.0.9"
 
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-cli = "2.4.0"
@@ -102,6 +103,7 @@ libc = "0.2.152"
 cocoa = "0.26.0"
 objc = "0.2.7"
 base64 = "0.22.1"
+image = "0.25.5"
 # bunch of hack for permissions
 core-graphics-helmer-fork = "0.24.0"
 nokhwa-bindings-macos = { git = "https://github.com/CapSoftware/nokhwa", rev = "0d3d1f30a78b" }
